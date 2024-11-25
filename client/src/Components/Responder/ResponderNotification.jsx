@@ -237,6 +237,33 @@ const Dashboard = () => {
         return distance.toFixed(2); // Return distance with 2 decimal places
     };
 
+    const handleSetFakeReport = async () => {
+        if (!reportDetails?.id) {
+            console.log('No report ID found');
+            return;
+        }
+        
+        try {
+            console.log('Attempting to mark report as fake:', reportDetails.id); // Debug log
+            const response = await fetch(`http://localhost:8081/api/full_report/${reportDetails.id}/setFakeReport`, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                credentials: 'include'
+            });
+
+            if (response.ok) {
+                console.log('Report marked as fake successfully');
+                navigate('/responder/home');
+            } else {
+                console.error('Failed to mark report as fake:', await response.text());
+            }
+        } catch (error) {
+            console.error('Error marking report as fake:', error);
+        }
+    };
+
     return (
         <div className="index-responder-body">
             <UserLogout />
@@ -306,6 +333,15 @@ const Dashboard = () => {
                         Responding to the scene...
                     </p>
                 </div>
+
+                <div className='fake-report-btn-container'>
+                    <button
+                        className="fake-report-btn"
+                        onClick={handleSetFakeReport}>
+                        Set as Fake Report
+                    </button>
+                </div>
+
                 <button onClick={() => navigate('/responder/final')}>Next</button> {/* temporary */}
             </div>
         </div>

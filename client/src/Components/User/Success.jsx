@@ -24,6 +24,8 @@ const UserIndex = () => {
   const [victimName, setVictimName] = useState(''); // State for victim name
   const [reporterId, setReporterId] = useState(''); // State for reporter ID
   const [closestPoliceId, setClosestPoliceId] = useState(''); // Add this state variable
+  const [pollingTimeout, setPollingTimeout] = useState(null);
+  const [isPolling, setIsPolling] = useState(false);
 
   // Function to calculate distance between two coordinates using Haversine formula
   const calculateDistance = (loc1, loc2) => {
@@ -81,8 +83,83 @@ const UserIndex = () => {
     return distances;
   };
 
+  const pollForResponder = async (fullReportData, startTime) => {
+    try {
+      let responderType = '';
+      if (report.type === 'Fire Emergency') {
+        responderType = 'Firefighter';
+      } else {
+        responderType = 'Medical Professional';
+      }
+
+      const respondersResponse = await axios.get('http://localhost:8081/api/responders/active', {
+        params: { respondertype: responderType }
+      });
+      const responders = respondersResponse.data;
+
+      let foundResponder = null;
+      if (responders.length > 0) {
+        const graph = {};
+        const incidentNode = 'incident';
+        graph[incidentNode] = {};
+
+        responders.forEach(responder => {
+          const responderNode = `responder_${responder.id}`;
+          graph[responderNode] = {};
+          const distance = calculateDistance(
+            { latitude: parseFloat(latitude), longitude: parseFloat(longitude) },
+            { latitude: parseFloat(responder.latitude), longitude: parseFloat(responder.longitude) }
+          );
+          graph[incidentNode][responderNode] = distance;
+          graph[responderNode][incidentNode] = distance;
+        });
+
+        const distances = dijkstra(graph, incidentNode);
+        let minDistance = Infinity;
+        for (const responderNode in distances) {
+          if (responderNode !== incidentNode && distances[responderNode] < minDistance && distances[responderNode] <= 3) {
+            minDistance = distances[responderNode];
+            foundResponder = responderNode;
+          }
+        }
+      }
+
+      const currentTime = Date.now();
+      const elapsedTime = currentTime - startTime;
+
+      if (foundResponder) {
+        // Save report with found responder
+        fullReportData.closestResponderId = foundResponder;
+        await axios.post('http://localhost:8081/api/full_report', fullReportData);
+        setClosestResponderId(foundResponder);
+        setHasSaved(true);
+        setNotification('Responder found and data saved successfully!');
+        setIsPolling(false);
+      } else if (elapsedTime >= 60000) { // 1 minute timeout
+        // Save report with no responder available
+        fullReportData.closestResponderId = 'No responder available';
+        await axios.post('http://localhost:8081/api/full_report', fullReportData);
+        setClosestResponderId('No responder available');
+        setHasSaved(true);
+        setNotification('No responder found within 1 minute. Data saved.');
+        setIsPolling(false);
+      } else {
+        // Continue polling
+        const timeoutId = setTimeout(() => pollForResponder(fullReportData, startTime), 3000);
+        setPollingTimeout(timeoutId);
+      }
+    } catch (error) {
+      console.error('Error during polling:', error);
+      setNotification('Error while searching for responders.');
+      setIsPolling(false);
+    }
+  };
+
   const handleSaveClick = async () => {
     try {
+      if (isPolling) return; // Prevent multiple polling sessions
+      setIsPolling(true);
+
       let responderType = '';
       if (report.type === 'Fire Emergency') {
         responderType = 'Firefighter';
@@ -232,14 +309,13 @@ const UserIndex = () => {
   
       console.log('Full report data before sending:', fullReportData);
   
-      await axios.post('http://localhost:8081/api/full_report', fullReportData);
-      console.log('Full report saved successfully');
-  
-      setNotification('Data saved successfully!');
-      setUploadedAt(originalUploadedAt);
+      setNotification('Searching for available responders...');
+      pollForResponder(fullReportData, Date.now());
+
     } catch (error) {
-      console.error('Error saving full report:', error);
+      console.error('Error initiating save process:', error);
       setNotification('Error saving data. Please try again.');
+      setIsPolling(false);
     }
   };
 
@@ -350,6 +426,13 @@ const UserIndex = () => {
     fetchSessionData();
   }, []);
 
+  useEffect(() => {
+    return () => {
+      if (pollingTimeout) {
+        clearTimeout(pollingTimeout);
+      }
+    };
+  }, [pollingTimeout]);
 
   const handleNotificationClose = () => {
     setNotification('');
