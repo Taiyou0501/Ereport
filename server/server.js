@@ -90,7 +90,9 @@ const db = mysql.createPool({
   port: env === 'production' 
     ? process.env.MYSQL_ADDON_PORT 
     : process.env.DB_PORT,
-  connectionLimit: 10 // Adjust this number based on your needs
+  connectionLimit: env === 'production' ? 4 : 10,
+  queueLimit: 0,
+  waitForConnections: true
 });
 
 db.on('error', (err) => {
@@ -98,6 +100,14 @@ db.on('error', (err) => {
   if (err.code === 'ER_USER_LIMIT_REACHED') {
     console.error('Maximum connection limit reached. Please try again later.');
   }
+});
+
+db.on('acquire', function (connection) {
+  console.log('Connection %d acquired', connection.threadId);
+});
+
+db.on('release', function (connection) {
+  console.log('Connection %d released', connection.threadId);
 });
 
 app.post('/register', (req, res) => {
