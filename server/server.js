@@ -10,7 +10,7 @@ const e = require('express');
 const multer = require('multer');
 const path = require('path');
 const session = require('express-session');
-const MySQLStore = require('express-mysql-session')(session);
+const MemoryStore = require('memorystore')(session);
 
 const app = express()
 
@@ -32,41 +32,12 @@ app.use(cors({
 }));
 app.use(express.json());
 
-const sessionStore = new MySQLStore({
-  host: env === 'production' 
-    ? process.env.MYSQL_ADDON_HOST 
-    : process.env.DB_HOST,
-  user: env === 'production' 
-    ? process.env.MYSQL_ADDON_USER 
-    : process.env.DB_USER,
-  password: env === 'production' 
-    ? process.env.MYSQL_ADDON_PASSWORD 
-    : process.env.DB_PASSWORD,
-  database: env === 'production' 
-    ? process.env.MYSQL_ADDON_DB 
-    : process.env.DB_DATABASE,
-  port: env === 'production' 
-    ? process.env.MYSQL_ADDON_PORT 
-    : process.env.DB_PORT,
-  createDatabaseTable: true,
-  schema: {
-    tableName: 'sessions',
-    columnNames: {
-      session_id: 'session_id',
-      expires: 'expires',
-      data: 'data'
-    }
-  },
-  connectionLimit: env === 'production' ? 1 : 5,
-  clearExpired: true,
-  checkExpirationInterval: 900000,
-  expiration: 86400000,
-});
-
 app.use(session({
   key: 'session_cookie_name',
   secret: 'Te8LtamAsYFGxL6aS/VA2z1l/mQICv8rdX/YjX59C2o=',
-  store: sessionStore,
+  store: new MemoryStore({
+    checkPeriod: 86400000 // prune expired entries every 24h
+  }),
   resave: false,
   saveUninitialized: false,
   cookie: { 
