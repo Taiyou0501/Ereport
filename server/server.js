@@ -14,16 +14,14 @@ const MemoryStore = require('memorystore')(session);
 
 const app = express()
 
-const allowedOrigins = [
-  'http://localhost:5173',
-  'http://192.168.0.77:5173',
-  'https://ereport-4gl8.vercel.app' // Add your deployed client URL here
-];
+const allowedOrigins = process.env.NODE_ENV === 'production' 
+  ? ['https://ereport-4gl8.vercel.app']
+  : ['http://localhost:3000', 'http://localhost:8081'];
 
 app.use(cors({
   origin: function (origin, callback) {
     if (!origin || allowedOrigins.indexOf(origin) !== -1) {
-      callback(null, true); 
+      callback(null, true);
     } else {
       callback(new Error('Not allowed by CORS'));
     }
@@ -34,15 +32,16 @@ app.use(express.json());
 
 app.use(session({
   key: 'session_cookie_name',
-  secret: 'Te8LtamAsYFGxL6aS/VA2z1l/mQICv8rdX/YjX59C2o=',
+  secret: process.env.SESSION_SECRET || 'Te8LtamAsYFGxL6aS/VA2z1l/mQICv8rdX/YjX59C2o=',
   store: new MemoryStore({
-    checkPeriod: 86400000 // prune expired entries every 24h
+    checkPeriod: 86400000
   }),
   resave: false,
   saveUninitialized: false,
   cookie: { 
-    secure: false,
-    maxAge: 1000 * 60 * 60 * 24 // 1 day
+    secure: process.env.NODE_ENV === 'production',
+    maxAge: 1000 * 60 * 60 * 24,
+    sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax'
   },
   rolling: true
 }));
@@ -59,31 +58,30 @@ const storage = multer.diskStorage({
 const upload = multer({ storage });
 
 
-const db = mysql.createPool({
-  host: env === 'production' 
-    ? process.env.MYSQL_ADDON_HOST 
-    : process.env.DB_HOST,
-  user: env === 'production' 
-    ? process.env.MYSQL_ADDON_USER 
-    : process.env.DB_USER,
-  password: env === 'production' 
-    ? process.env.MYSQL_ADDON_PASSWORD 
-    : process.env.DB_PASSWORD,
-  database: env === 'production' 
-    ? process.env.MYSQL_ADDON_DB 
-    : process.env.DB_DATABASE,
-  port: env === 'production' 
-    ? process.env.MYSQL_ADDON_PORT 
-    : process.env.DB_PORT,
-  connectionLimit: env === 'production' ? 3 : 10,
-  queueLimit: 0,
-  waitForConnections: true,
-  connectTimeout: 10000,
-  acquireTimeout: 10000,
-  timeout: 10000,
-  enableKeepAlive: true,
-  keepAliveInitialDelay: 0
-});
+const db = mysql.createPool(
+  process.env.NODE_ENV === 'production' 
+    ? {
+        host: process.env.MYSQL_ADDON_HOST,
+        user: process.env.MYSQL_ADDON_USER,
+        password: process.env.MYSQL_ADDON_PASSWORD,
+        database: process.env.MYSQL_ADDON_DB,
+        port: process.env.MYSQL_ADDON_PORT,
+        connectionLimit: 3,
+        queueLimit: 0,
+        waitForConnections: true,
+        connectTimeout: 10000,
+        acquireTimeout: 10000,
+        timeout: 10000,
+        enableKeepAlive: true,
+        keepAliveInitialDelay: 0
+      }
+    : {
+        host: 'localhost',
+        user: 'root',
+        password: '',
+        database: 'ereport'
+      }
+);
 
 db.on('error', (err) => {
   console.error('Database pool error:', err);
