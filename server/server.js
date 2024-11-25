@@ -47,7 +47,20 @@ const sessionStore = new MySQLStore({
     : process.env.DB_DATABASE,
   port: env === 'production' 
     ? process.env.MYSQL_ADDON_PORT 
-    : process.env.DB_PORT
+    : process.env.DB_PORT,
+  createDatabaseTable: true,
+  schema: {
+    tableName: 'sessions',
+    columnNames: {
+      session_id: 'session_id',
+      expires: 'expires',
+      data: 'data'
+    }
+  },
+  connectionLimit: env === 'production' ? 1 : 5,
+  clearExpired: true,
+  checkExpirationInterval: 900000,
+  expiration: 86400000,
 });
 
 app.use(session({
@@ -55,11 +68,12 @@ app.use(session({
   secret: 'Te8LtamAsYFGxL6aS/VA2z1l/mQICv8rdX/YjX59C2o=',
   store: sessionStore,
   resave: false,
-  saveUninitialized: true,
+  saveUninitialized: false,
   cookie: { 
     secure: false,
     maxAge: 1000 * 60 * 60 * 24 // 1 day
-  }
+  },
+  rolling: true
 }));
 
 const storage = multer.diskStorage({
@@ -90,9 +104,14 @@ const db = mysql.createPool({
   port: env === 'production' 
     ? process.env.MYSQL_ADDON_PORT 
     : process.env.DB_PORT,
-  connectionLimit: env === 'production' ? 4 : 10,
+  connectionLimit: env === 'production' ? 3 : 10,
   queueLimit: 0,
-  waitForConnections: true
+  waitForConnections: true,
+  connectTimeout: 10000,
+  acquireTimeout: 10000,
+  timeout: 10000,
+  enableKeepAlive: true,
+  keepAliveInitialDelay: 0
 });
 
 db.on('error', (err) => {
@@ -1284,3 +1303,12 @@ app.put('/api/full_report/:id/setFakeReport', (req, res) => {
 app.listen(8081, () => {
     console.log("Listening...")
 } )
+
+process.on('SIGINT', () => {
+  db.end((err) => {
+    if (err) {
+      console.error('Error closing database connections:', err);
+    }
+    process.exit(err ? 1 : 0);
+  });
+});
