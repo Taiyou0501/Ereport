@@ -15,45 +15,50 @@ const Login = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
+      // First login attempt
       const response = await api.post('/checkAllTables', {
         username,
         password
       });
       
       if (response.data.message === "Login Successful") {
-        // Get the user details after successful login
-        const sessionResponse = await api.get('/checkSession');
-        if (sessionResponse.data.isAuthenticated) {
-          login(sessionResponse.data.user); // Pass the user data to context
-          
-          switch (response.data.table) {
-            case 'admin_details':
-              navigate("/admin/home");
-              break;
-            case 'user_details':
-              navigate("/user/index");
-              break;
-            case 'police_details':
-              navigate("/police/home");
-              break;
-            case 'responder_details':
-              navigate("/responder/home");
-              break;
-            case 'unit_details':
-              navigate("/unit/home");
-              break;
-            case 'barangay_details':
-              navigate("/barangay/home");
-              break;
-            default:
-              alert("Unknown table");
-          }
+        // Store the table information
+        const userTable = response.data.table;
+        
+        // Immediately navigate based on the table
+        switch (userTable) {
+          case 'admin_details':
+            login(response.data.user); // Add user data directly from first response
+            navigate("/admin/home");
+            break;
+          case 'user_details':
+            login(response.data.user);
+            navigate("/user/index");
+            break;
+          case 'police_details':
+            login(response.data.user);
+            navigate("/police/home");
+            break;
+          case 'responder_details':
+            login(response.data.user);
+            navigate("/responder/home");
+            break;
+          case 'unit_details':
+            login(response.data.user);
+            navigate("/unit/home");
+            break;
+          case 'barangay_details':
+            login(response.data.user);
+            navigate("/barangay/home");
+            break;
+          default:
+            alert("Unknown user type");
         }
       } else {
         alert("Invalid Credentials");
       }
     } catch (error) {
-      console.error(error);
+      console.error('Login error:', error);
       alert("Login failed. Please try again.");
     }
   }

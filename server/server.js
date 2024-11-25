@@ -35,17 +35,13 @@ app.use(cors({
 app.use(express.json());
 
 app.use(session({
-  key: 'session_cookie_name',
   secret: 'Te8LtamAsYFGxL6aS/VA2z1l/mQICv8rdX/YjX59C2o=',
-  store: new MemoryStore({
-    checkPeriod: 86400000 // prune expired entries every 24h
-  }),
   resave: false,
   saveUninitialized: false,
-  cookie: { 
-    secure: env === 'production',
-    sameSite: env === 'production' ? 'none' : 'lax',
-    maxAge: 1000 * 60 * 60 * 24 // 1 day
+  cookie: {
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
+    maxAge: 24 * 60 * 60 * 1000 // 24 hours
   },
   rolling: true
 }));
@@ -149,46 +145,52 @@ app.post('/register', async (req, res) => {
 
 app.post('/checkAllTables', async (req, res) => {
   const { username, password } = req.body;
-  console.log(`Checking for user: ${username}`);
-  const tables = ['admin_details', 'user_details', 'police_details', 'responder_details', 'unit_details', 'barangay_details'];
+  
+  // List of tables to check
+  const tables = [
+    'admin_details', 
+    'user_details', 
+    'police_details', 
+    'responder_details', 
+    'unit_details', 
+    'barangay_details'
+  ];
 
-  try {
-    for (const table of tables) {
+  for (const table of tables) {
+    try {
       const query = `SELECT * FROM ${table} WHERE username = ? AND password = ?`;
-      const [results] = await new Promise((resolve, reject) => {
-        db.query(query, [username, password], (err, results) => {
-          if (err) reject(err);
-          else resolve([results]);
-        });
-      });
+      const [results] = await db.promise().query(query, [username, password]);
 
       if (results.length > 0) {
-        console.log(`Found in table: ${table}`);
-        req.session.user = { username, table };
+        // User found, set session
+        const user = results[0];
+        req.session.user = {
+          ...user,
+          table: table,
+          role: table.split('_')[0].toUpperCase()
+        };
         
-        return new Promise((resolve, reject) => {
-          req.session.save(err => {
-            if (err) {
-              console.error('Error saving session:', err);
-              reject(err);
-            }
-            res.send({ message: "Login Successful", table, sessionId: req.sessionID });
-            resolve();
-          });
+        // Send user data along with success message
+        return res.json({
+          message: "Login Successful",
+          table: table,
+          user: {
+            firstname: user.firstname,
+            lastname: user.lastname,
+            email: user.email,
+            username: user.username,
+            password: user.password,
+            cpnumber: user.cpnumber,
+            role: table.split('_')[0].toUpperCase()
+          }
         });
       }
-    }
-
-    // If we get here, no user was found
-    console.log("User not found in any table");
-    res.send({ message: "Invalid Credentials" });
-
-  } catch (error) {
-    console.error('Error in checkAllTables:', error);
-    if (!res.headersSent) {
-      res.status(500).send({ message: "Error checking tables" });
+    } catch (error) {
+      console.error(`Error checking ${table}:`, error);
     }
   }
+
+  res.json({ message: "Invalid Credentials" });
 });
 
 app.post('/logout', (req, res) => {
