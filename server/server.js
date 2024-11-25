@@ -74,7 +74,7 @@ const storage = multer.diskStorage({
 const upload = multer({ storage });
 
 
-const db = mysql.createConnection({
+const db = mysql.createPool({
   host: env === 'production' 
     ? process.env.MYSQL_ADDON_HOST 
     : process.env.DB_HOST,
@@ -89,8 +89,16 @@ const db = mysql.createConnection({
     : process.env.DB_DATABASE,
   port: env === 'production' 
     ? process.env.MYSQL_ADDON_PORT 
-    : process.env.DB_PORT
-})
+    : process.env.DB_PORT,
+  connectionLimit: 10 // Adjust this number based on your needs
+});
+
+db.on('error', (err) => {
+  console.error('Database pool error:', err);
+  if (err.code === 'ER_USER_LIMIT_REACHED') {
+    console.error('Maximum connection limit reached. Please try again later.');
+  }
+});
 
 app.post('/register', (req, res) => {
   const { firstname, lastname, username, email, password, cpnumber } = req.body; // Add cpnumber here
@@ -138,14 +146,6 @@ app.post('/register', (req, res) => {
   };
 
   checkAllTables(0);
-});
-
-db.connect(err => {
-  if (err) {
-    console.error('Error connecting to database:', err);
-    return;
-  }
-  console.log('Database connected!');
 });
 
 app.post('/checkAllTables', (req, res) => {
