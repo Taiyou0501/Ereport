@@ -6,8 +6,6 @@ import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faHouse, faFile, faUsers, faCircleUser, faRightToBracket, faEye, faEyeSlash } from '@fortawesome/free-solid-svg-icons';
 import Logout from '../../Logout';
 
-const API_URL = import.meta.env.VITE_API_URL;
-
 const AdminDashboard = () => {
   const navigate = useNavigate();
   const [userDetails, setUserDetails] = useState(null);
@@ -19,7 +17,7 @@ const AdminDashboard = () => {
   useEffect(() => {
     const fetchUserDetails = async () => {
       try {
-        const response = await fetch(`${API_URL}/checkSession`, {
+        const response = await fetch('http://localhost:8081/checkSession', {
           method: 'GET',
           credentials: 'include',
         });
@@ -53,7 +51,7 @@ const AdminDashboard = () => {
 
   const handleSaveClick = async () => {
     try {
-      const response = await fetch(`${API_URL}/updateAccount`, {
+      const response = await fetch('http://localhost:8081/updateAccount', {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -70,7 +68,7 @@ const AdminDashboard = () => {
         setErrorMessage(data.message || 'Error updating account details');
       }
     } catch (error) {
-      console.error('Error updating account:', error);
+      console.error('Error updating account details:', error);
       setErrorMessage('Error updating account details');
     }
   };
