@@ -28,20 +28,21 @@ app.use(cors({
       callback(new Error('Not allowed by CORS'));
     }
   },
-  credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization']
+  credentials: true
 }));
 app.use(express.json());
 
 app.use(session({
+  key: 'session_cookie_name',
   secret: 'Te8LtamAsYFGxL6aS/VA2z1l/mQICv8rdX/YjX59C2o=',
+  store: new MemoryStore({
+    checkPeriod: 86400000 // prune expired entries every 24h
+  }),
   resave: false,
   saveUninitialized: false,
-  cookie: {
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
-    maxAge: 24 * 60 * 60 * 1000 // 24 hours
+  cookie: { 
+    secure: false,
+    maxAge: 1000 * 60 * 60 * 24 // 1 day
   },
   rolling: true
 }));
@@ -99,98 +100,91 @@ db.on('release', function (connection) {
   console.log('Connection %d released', connection.threadId);
 });
 
-const checkUsername = (table, username) => {
-  return new Promise((resolve, reject) => {
+app.post('/register', (req, res) => {
+  const { firstname, lastname, username, email, password, cpnumber } = req.body; // Add cpnumber here
+  const tables = ['admin_details', 'user_details', 'police_details', 'responder_details', 'unit_details', 'barangay_details'];
+
+  let found = false;
+
+  const checkUsername = (table, callback) => {
     const query = `SELECT * FROM ${table} WHERE username = ?`;
     db.query(query, [username], (err, results) => {
-      if (err) reject(err);
-      resolve(results.length > 0);
+      if (err) return callback(err);
+
+      if (results.length > 0) {
+        found = true;
+        return callback(null, true);
+      }
+
+      callback(null, false);
     });
-  });
-};
+  };
 
-app.post('/register', async (req, res) => {
-  try {
-    const { firstname, lastname, username, email, password, cpnumber } = req.body;
-    const tables = ['admin_details', 'user_details', 'police_details', 'responder_details', 'unit_details', 'barangay_details'];
+  const checkAllTables = (index) => {
+    if (index >= tables.length) {
+      if (!found) {
+        // Insert new user into the user_details table
+        const sql = "INSERT INTO user_details (`firstname`, `lastname`, `username`, `email`, `password`, `cpnumber`) VALUES (?)"; // Add cpnumber here
+        const values = [firstname, lastname, username, email, password, cpnumber]; // Add cpnumber here
+        db.query(sql, [values], (err, data) => {
+          if (err) return res.status(500).json(err);
+          return res.json({ message: 'Registered Successfully' });
+        });
+      } else {
+        return res.status(400).json({ message: 'Username already exists' });
+      }
+      return;
+    }
 
-    // Check all tables for existing username
-    for (const table of tables) {
-      const exists = await checkUsername(table, username);
+    checkUsername(tables[index], (err, exists) => {
+      if (err) return res.status(500).json(err);
       if (exists) {
         return res.status(400).json({ message: 'Username already exists' });
       }
-    }
-
-    // If we get here, username doesn't exist in any table
-    const sql = "INSERT INTO user_details (`firstname`, `lastname`, `username`, `email`, `password`, `cpnumber`) VALUES (?)";
-    const values = [firstname, lastname, username, email, password, cpnumber];
-    
-    await new Promise((resolve, reject) => {
-      db.query(sql, [values], (err, data) => {
-        if (err) reject(err);
-        else resolve(data);
-      });
+      checkAllTables(index + 1);
     });
+  };
 
-    res.json({ message: 'Registered Successfully' });
-
-  } catch (error) {
-    console.error('Registration error:', error);
-    if (!res.headersSent) {
-      res.status(500).json({ message: 'Error during registration' });
-    }
-  }
+  checkAllTables(0);
 });
 
-app.post('/checkAllTables', async (req, res) => {
+app.post('/checkAllTables', (req, res) => {
   const { username, password } = req.body;
-  
-  // List of tables to check
-  const tables = [
-    'admin_details', 
-    'user_details', 
-    'police_details', 
-    'responder_details', 
-    'unit_details', 
-    'barangay_details'
-  ];
+  console.log(`Checking for user: ${username}`);
+  const tables = ['admin_details', 'user_details', 'police_details', 'responder_details', 'unit_details', 'barangay_details'];
 
-  for (const table of tables) {
-    try {
-      const query = `SELECT * FROM ${table} WHERE username = ? AND password = ?`;
-      const [results] = await db.promise().query(query, [username, password]);
+  let found = false;
+
+  tables.forEach((table, index) => {
+    const query = `SELECT * FROM ${table} WHERE username = ? AND password = ?`;
+    db.query(query, [username, password], (err, results) => {
+      if (err) {
+        console.error(`Error querying table ${table}:`, err);
+        if (index === tables.length - 1 && !found) {
+          res.status(500).send({ message: "Error checking tables" });
+        }
+        return;
+      }
 
       if (results.length > 0) {
-        // User found, set session
-        const user = results[0];
-        req.session.user = {
-          ...user,
-          table: table,
-          role: table.split('_')[0].toUpperCase()
-        };
-        
-        // Send user data along with success message
-        return res.json({
-          message: "Login Successful",
-          table: table,
-          user: {
-            firstname: user.firstname,
-            lastname: user.lastname,
-            email: user.email,
-            username: user.username,
-            password: user.password,
-            cpnumber: user.cpnumber,
-            role: table.split('_')[0].toUpperCase()
+        found = true;
+        console.log(`Found in table: ${table}`);
+        req.session.user = { username, table }; // Store session data
+        req.session.save(err => {
+          if (err) {
+            console.error('Error saving session:', err);
+            return res.status(500).send({ message: "Error saving session" });
           }
+          res.send({ message: "Login Successful", table, sessionId: req.sessionID });
         });
       }
-    } catch (error) {
-      console.error(`Error checking ${table}:`, error);
-    }
-  }
 
-  res.json({ message: "Invalid Credentials" });
+      if (index === tables.length - 1 && !found) {
+        console.log("User not found in any table");
+        res.send({ message: "Invalid Credentials" });
+      }
+    });
+  });
 });
 
 app.post('/logout', (req, res) => {

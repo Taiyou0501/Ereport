@@ -15,51 +15,41 @@ const Login = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
-      // First login attempt
       const response = await api.post('/checkAllTables', {
         username,
         password
       });
-      
+      console.log(response.data);
       if (response.data.message === "Login Successful") {
-        // Store the table information
-        const userTable = response.data.table;
-        
-        // Immediately navigate based on the table
-        switch (userTable) {
+        console.log(`Redirecting to dashboard for table: ${response.data.table}`);
+        login(); // Set the authentication state
+        switch (response.data.table) {
           case 'admin_details':
-            login(response.data.user); // Add user data directly from first response
             navigate("/admin/home");
             break;
           case 'user_details':
-            login(response.data.user);
             navigate("/user/index");
             break;
           case 'police_details':
-            login(response.data.user);
             navigate("/police/home");
             break;
           case 'responder_details':
-            login(response.data.user);
             navigate("/responder/home");
             break;
           case 'unit_details':
-            login(response.data.user);
             navigate("/unit/home");
             break;
           case 'barangay_details':
-            login(response.data.user);
             navigate("/barangay/home");
             break;
           default:
-            alert("Unknown user type");
+            alert("Unknown table");
         }
       } else {
         alert("Invalid Credentials");
       }
     } catch (error) {
-      console.error('Login error:', error);
-      alert("Login failed. Please try again.");
+      console.error(error);
     }
   }
 
