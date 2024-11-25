@@ -28,7 +28,9 @@ app.use(cors({
       callback(new Error('Not allowed by CORS'));
     }
   },
-  credentials: true
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization']
 }));
 app.use(express.json());
 
@@ -41,7 +43,8 @@ app.use(session({
   resave: false,
   saveUninitialized: false,
   cookie: { 
-    secure: false,
+    secure: env === 'production',
+    sameSite: env === 'production' ? 'none' : 'lax',
     maxAge: 1000 * 60 * 60 * 24 // 1 day
   },
   rolling: true
@@ -100,91 +103,92 @@ db.on('release', function (connection) {
   console.log('Connection %d released', connection.threadId);
 });
 
-app.post('/register', (req, res) => {
-  const { firstname, lastname, username, email, password, cpnumber } = req.body; // Add cpnumber here
-  const tables = ['admin_details', 'user_details', 'police_details', 'responder_details', 'unit_details', 'barangay_details'];
-
-  let found = false;
-
-  const checkUsername = (table, callback) => {
+const checkUsername = (table, username) => {
+  return new Promise((resolve, reject) => {
     const query = `SELECT * FROM ${table} WHERE username = ?`;
     db.query(query, [username], (err, results) => {
-      if (err) return callback(err);
-
-      if (results.length > 0) {
-        found = true;
-        return callback(null, true);
-      }
-
-      callback(null, false);
+      if (err) reject(err);
+      resolve(results.length > 0);
     });
-  };
+  });
+};
 
-  const checkAllTables = (index) => {
-    if (index >= tables.length) {
-      if (!found) {
-        // Insert new user into the user_details table
-        const sql = "INSERT INTO user_details (`firstname`, `lastname`, `username`, `email`, `password`, `cpnumber`) VALUES (?)"; // Add cpnumber here
-        const values = [firstname, lastname, username, email, password, cpnumber]; // Add cpnumber here
-        db.query(sql, [values], (err, data) => {
-          if (err) return res.status(500).json(err);
-          return res.json({ message: 'Registered Successfully' });
-        });
-      } else {
-        return res.status(400).json({ message: 'Username already exists' });
-      }
-      return;
-    }
+app.post('/register', async (req, res) => {
+  try {
+    const { firstname, lastname, username, email, password, cpnumber } = req.body;
+    const tables = ['admin_details', 'user_details', 'police_details', 'responder_details', 'unit_details', 'barangay_details'];
 
-    checkUsername(tables[index], (err, exists) => {
-      if (err) return res.status(500).json(err);
+    // Check all tables for existing username
+    for (const table of tables) {
+      const exists = await checkUsername(table, username);
       if (exists) {
         return res.status(400).json({ message: 'Username already exists' });
       }
-      checkAllTables(index + 1);
-    });
-  };
+    }
 
-  checkAllTables(0);
+    // If we get here, username doesn't exist in any table
+    const sql = "INSERT INTO user_details (`firstname`, `lastname`, `username`, `email`, `password`, `cpnumber`) VALUES (?)";
+    const values = [firstname, lastname, username, email, password, cpnumber];
+    
+    await new Promise((resolve, reject) => {
+      db.query(sql, [values], (err, data) => {
+        if (err) reject(err);
+        else resolve(data);
+      });
+    });
+
+    res.json({ message: 'Registered Successfully' });
+
+  } catch (error) {
+    console.error('Registration error:', error);
+    if (!res.headersSent) {
+      res.status(500).json({ message: 'Error during registration' });
+    }
+  }
 });
 
-app.post('/checkAllTables', (req, res) => {
+app.post('/checkAllTables', async (req, res) => {
   const { username, password } = req.body;
   console.log(`Checking for user: ${username}`);
   const tables = ['admin_details', 'user_details', 'police_details', 'responder_details', 'unit_details', 'barangay_details'];
 
-  let found = false;
-
-  tables.forEach((table, index) => {
-    const query = `SELECT * FROM ${table} WHERE username = ? AND password = ?`;
-    db.query(query, [username, password], (err, results) => {
-      if (err) {
-        console.error(`Error querying table ${table}:`, err);
-        if (index === tables.length - 1 && !found) {
-          res.status(500).send({ message: "Error checking tables" });
-        }
-        return;
-      }
+  try {
+    for (const table of tables) {
+      const query = `SELECT * FROM ${table} WHERE username = ? AND password = ?`;
+      const [results] = await new Promise((resolve, reject) => {
+        db.query(query, [username, password], (err, results) => {
+          if (err) reject(err);
+          else resolve([results]);
+        });
+      });
 
       if (results.length > 0) {
-        found = true;
         console.log(`Found in table: ${table}`);
-        req.session.user = { username, table }; // Store session data
-        req.session.save(err => {
-          if (err) {
-            console.error('Error saving session:', err);
-            return res.status(500).send({ message: "Error saving session" });
-          }
-          res.send({ message: "Login Successful", table, sessionId: req.sessionID });
+        req.session.user = { username, table };
+        
+        return new Promise((resolve, reject) => {
+          req.session.save(err => {
+            if (err) {
+              console.error('Error saving session:', err);
+              reject(err);
+            }
+            res.send({ message: "Login Successful", table, sessionId: req.sessionID });
+            resolve();
+          });
         });
       }
+    }
 
-      if (index === tables.length - 1 && !found) {
-        console.log("User not found in any table");
-        res.send({ message: "Invalid Credentials" });
-      }
-    });
-  });
+    // If we get here, no user was found
+    console.log("User not found in any table");
+    res.send({ message: "Invalid Credentials" });
+
+  } catch (error) {
+    console.error('Error in checkAllTables:', error);
+    if (!res.headersSent) {
+      res.status(500).send({ message: "Error checking tables" });
+    }
+  }
 });
 
 app.post('/logout', (req, res) => {

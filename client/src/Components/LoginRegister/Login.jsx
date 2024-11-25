@@ -19,37 +19,42 @@ const Login = () => {
         username,
         password
       });
-      console.log(response.data);
+      
       if (response.data.message === "Login Successful") {
-        console.log(`Redirecting to dashboard for table: ${response.data.table}`);
-        login(); // Set the authentication state
-        switch (response.data.table) {
-          case 'admin_details':
-            navigate("/admin/home");
-            break;
-          case 'user_details':
-            navigate("/user/index");
-            break;
-          case 'police_details':
-            navigate("/police/home");
-            break;
-          case 'responder_details':
-            navigate("/responder/home");
-            break;
-          case 'unit_details':
-            navigate("/unit/home");
-            break;
-          case 'barangay_details':
-            navigate("/barangay/home");
-            break;
-          default:
-            alert("Unknown table");
+        // Get the user details after successful login
+        const sessionResponse = await api.get('/checkSession');
+        if (sessionResponse.data.isAuthenticated) {
+          login(sessionResponse.data.user); // Pass the user data to context
+          
+          switch (response.data.table) {
+            case 'admin_details':
+              navigate("/admin/home");
+              break;
+            case 'user_details':
+              navigate("/user/index");
+              break;
+            case 'police_details':
+              navigate("/police/home");
+              break;
+            case 'responder_details':
+              navigate("/responder/home");
+              break;
+            case 'unit_details':
+              navigate("/unit/home");
+              break;
+            case 'barangay_details':
+              navigate("/barangay/home");
+              break;
+            default:
+              alert("Unknown table");
+          }
         }
       } else {
         alert("Invalid Credentials");
       }
     } catch (error) {
       console.error(error);
+      alert("Login failed. Please try again.");
     }
   }
 
