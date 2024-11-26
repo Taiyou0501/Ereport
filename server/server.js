@@ -10,57 +10,73 @@ const e = require('express');
 const multer = require('multer');
 const path = require('path');
 const session = require('express-session');
-const MySQLStore = require('express-mysql-session')(session);
+const MemoryStore = require('memorystore')(session);
 
 const app = express()
 
 const allowedOrigins = [
   'http://localhost:5173',
   'http://192.168.0.77:5173',
-  'https://ereport-4gl8.vercel.app' // Add your deployed client URL here
+  'https://ereport-4gl8.vercel.app',
+  'https://ereport-4gl8-gzpuca0j3-taiyou0501s-projects.vercel.app'
 ];
 
-app.use(cors({
+const corsOptions = {
   origin: function (origin, callback) {
-    if (!origin || allowedOrigins.indexOf(origin) !== -1) {
-      callback(null, true); 
+    console.log('Request origin:', origin);
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true);
     } else {
+      console.log('Origin not allowed:', origin);
       callback(new Error('Not allowed by CORS'));
     }
   },
-  credentials: true
-}));
-app.use(express.json());
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'Cookie'],
+  exposedHeaders: ['set-cookie'],
+  preflightContinue: false,
+  optionsSuccessStatus: 204
+};
 
-const sessionStore = new MySQLStore({
-  host: env === 'production' 
-    ? process.env.MYSQL_ADDON_HOST 
-    : process.env.DB_HOST,
-  user: env === 'production' 
-    ? process.env.MYSQL_ADDON_USER 
-    : process.env.DB_USER,
-  password: env === 'production' 
-    ? process.env.MYSQL_ADDON_PASSWORD 
-    : process.env.DB_PASSWORD,
-  database: env === 'production' 
-    ? process.env.MYSQL_ADDON_DB 
-    : process.env.DB_DATABASE,
-  port: env === 'production' 
-    ? process.env.MYSQL_ADDON_PORT 
-    : process.env.DB_PORT
+app.use(cors(corsOptions));
+
+app.use((req, res, next) => {
+  const origin = req.headers.origin;
+  if (allowedOrigins.includes(origin)) {
+    res.header('Access-Control-Allow-Origin', origin);
+    res.header('Access-Control-Allow-Credentials', 'true');
+  }
+  next();
 });
+
+app.use(express.json());
 
 app.use(session({
   key: 'session_cookie_name',
-  secret: 'Te8LtamAsYFGxL6aS/VA2z1l/mQICv8rdX/YjX59C2o=',
-  store: sessionStore,
-  resave: false,
-  saveUninitialized: true,
+  secret: process.env.SESSION_SECRET || 'Te8LtamAsYFGxL6aS/VA2z1l/mQICv8rdX/YjX59C2o=',
+  store: new MemoryStore({
+    checkPeriod: 86400000
+  }),
+  resave: true,
+  saveUninitialized: false,
   cookie: { 
-    secure: false,
-    maxAge: 1000 * 60 * 60 * 24 // 1 day
-  }
+    secure: true,
+    sameSite: 'none',
+    maxAge: 1000 * 60 * 60 * 24,
+    httpOnly: true,
+    path: '/',
+    domain: '.onrender.com'
+  },
+  rolling: true
 }));
+
+app.use((req, res, next) => {
+  console.log('Request URL:', req.url);
+  console.log('Session ID:', req.sessionID);
+  console.log('Session Data:', req.session);
+  next();
+});
 
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
@@ -74,23 +90,38 @@ const storage = multer.diskStorage({
 const upload = multer({ storage });
 
 
-const db = mysql.createConnection({
-  host: env === 'production' 
-    ? process.env.MYSQL_ADDON_HOST 
-    : process.env.DB_HOST,
-  user: env === 'production' 
-    ? process.env.MYSQL_ADDON_USER 
-    : process.env.DB_USER,
-  password: env === 'production' 
-    ? process.env.MYSQL_ADDON_PASSWORD 
-    : process.env.DB_PASSWORD,
-  database: env === 'production' 
-    ? process.env.MYSQL_ADDON_DB 
-    : process.env.DB_DATABASE,
-  port: env === 'production' 
-    ? process.env.MYSQL_ADDON_PORT 
-    : process.env.DB_PORT
-})
+const db = mysql.createPool({
+  host: process.env.MYSQL_ADDON_HOST,
+  user: process.env.MYSQL_ADDON_USER,
+  password: process.env.MYSQL_ADDON_PASSWORD,
+  database: process.env.MYSQL_ADDON_DB,
+  port: process.env.MYSQL_ADDON_PORT,
+  connectionLimit: 3,
+  queueLimit: 0,
+  waitForConnections: true,
+  connectTimeout: 10000,
+  acquireTimeout: 10000,
+  timeout: 10000,
+  enableKeepAlive: true,
+  keepAliveInitialDelay: 0
+});
+
+db.on('error', (err) => {
+  console.error('Database pool error:', err);
+  if (err.code === 'ER_USER_LIMIT_REACHED') {
+    console.error('Maximum connection limit reached. Please try again later.');
+  }
+});
+
+db.on('acquire', function (connection) {
+  console.log('Connection %d acquired', connection.threadId);
+});
+
+db.on('release', function (connection) {
+  console.log('Connection %d released', connection.threadId);
+});
+
+app.options('/checkAllTables', cors());
 
 app.post('/register', (req, res) => {
   const { firstname, lastname, username, email, password, cpnumber } = req.body; // Add cpnumber here
@@ -140,51 +171,64 @@ app.post('/register', (req, res) => {
   checkAllTables(0);
 });
 
-db.connect(err => {
-  if (err) {
-    console.error('Error connecting to database:', err);
-    return;
-  }
-  console.log('Database connected!');
-});
-
 app.post('/checkAllTables', (req, res) => {
-  const { username, password } = req.body;
-  console.log(`Checking for user: ${username}`);
-  const tables = ['admin_details', 'user_details', 'police_details', 'responder_details', 'unit_details', 'barangay_details'];
+    const { username, password } = req.body;
+    console.log('Login attempt for:', username);
+    
+    const tables = ['admin_details', 'user_details', 'police_details', 'responder_details', 'unit_details', 'barangay_details'];
+    let found = false;
+    let checksCompleted = 0;
 
-  let found = false;
+    tables.forEach(table => {
+        const query = `SELECT * FROM ${table} WHERE username = ? AND password = ?`;
+        db.query(query, [username, password], (err, results) => {
+            checksCompleted++;
+            
+            if (err) {
+                console.error(`Error querying ${table}:`, err);
+                return;
+            }
 
-  tables.forEach((table, index) => {
-    const query = `SELECT * FROM ${table} WHERE username = ? AND password = ?`;
-    db.query(query, [username, password], (err, results) => {
-      if (err) {
-        console.error(`Error querying table ${table}:`, err);
-        if (index === tables.length - 1 && !found) {
-          res.status(500).send({ message: "Error checking tables" });
-        }
-        return;
-      }
+            if (results.length > 0 && !found) {
+                found = true;
+                const userData = results[0];
+                
+                // Set session data
+                req.session.user = {
+                    id: userData.id,
+                    username: userData.username,
+                    table: table,
+                    firstname: userData.firstname,
+                    lastname: userData.lastname
+                };
 
-      if (results.length > 0) {
-        found = true;
-        console.log(`Found in table: ${table}`);
-        req.session.user = { username, table }; // Store session data
-        req.session.save(err => {
-          if (err) {
-            console.error('Error saving session:', err);
-            return res.status(500).send({ message: "Error saving session" });
-          }
-          res.send({ message: "Login Successful", table, sessionId: req.sessionID });
+                // Save session explicitly
+                req.session.save((err) => {
+                    if (err) {
+                        console.error('Session save error:', err);
+                        return res.status(500).json({ message: 'Session save failed' });
+                    }
+                    
+                    console.log('Session saved successfully:', req.session);
+                    return res.json({
+                        message: "Login Successful",
+                        table: table,
+                        user: {
+                            username: userData.username,
+                            firstname: userData.firstname,
+                            lastname: userData.lastname,
+                            table: table
+                        }
+                    });
+                });
+            }
+
+            // If we've checked all tables and found nothing
+            if (checksCompleted === tables.length && !found) {
+                res.json({ message: "Invalid Credentials" });
+            }
         });
-      }
-
-      if (index === tables.length - 1 && !found) {
-        console.log("User not found in any table");
-        res.send({ message: "Invalid Credentials" });
-      }
     });
-  });
 });
 
 app.post('/logout', (req, res) => {
@@ -700,23 +744,41 @@ app.get('/api/accounts/:table/:id', (req, res) => {
 });
 
 app.get('/checkSession', (req, res) => {
-  if (req.session.user) {
-    const { username, table } = req.session.user;
-    const sql = `SELECT * FROM ${table} WHERE username = ?`;
-    
-    db.query(sql, [username], (err, results) => {
-      if (err) {
-        console.error('Error fetching user details:', err);
-        return res.status(500).json({ message: 'Error fetching user details' });
-      }
-      if (results.length === 0) {
-        return res.status(404).json({ message: 'User not found' });
-      }
-      res.send({ isAuthenticated: true, user: results[0] });
-    });
-  } else {
-    res.send({ isAuthenticated: false });
-  }
+    console.log('Checking session:', req.session);
+    console.log('Session ID:', req.sessionID);
+    console.log('Session user:', req.session?.user);
+
+    if (req.session && req.session.user) {
+        // Query the database to verify the user still exists
+        const table = req.session.user.table;
+        const username = req.session.user.username;
+        
+        const query = `SELECT * FROM ${table} WHERE username = ?`;
+        db.query(query, [username], (err, results) => {
+            if (err) {
+                console.error('Database query error:', err);
+                return res.json({ isAuthenticated: false });
+            }
+
+            if (results.length > 0) {
+                const userData = results[0];
+                delete userData.password; // Remove sensitive data
+                
+                return res.json({
+                    isAuthenticated: true,
+                    user: {
+                        ...userData,
+                        table: table
+                    }
+                });
+            } else {
+                return res.json({ isAuthenticated: false });
+            }
+        });
+    } else {
+        console.log('No session or user found');
+        return res.json({ isAuthenticated: false });
+    }
 });
 
 

@@ -16,10 +16,16 @@ const api = axios.create({
 });
 
 // Add request interceptor for debugging
-api.interceptors.request.use(request => {
-    console.log('Starting Request:', request.url);
-    return request;
-});
+api.interceptors.request.use(
+    config => {
+        console.log('Making request to:', config.url);
+        console.log('Request config:', config);
+        return config;
+    },
+    error => {
+        return Promise.reject(error);
+    }
+);
 
 // Add response interceptor for debugging
 api.interceptors.response.use(
