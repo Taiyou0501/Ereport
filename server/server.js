@@ -60,7 +60,7 @@ app.use(session({
   store: new MemoryStore({
     checkPeriod: 86400000
   }),
-  resave: false,
+  resave: true,
   saveUninitialized: false,
   cookie: { 
     secure: process.env.NODE_ENV === 'production',
@@ -71,6 +71,13 @@ app.use(session({
   },
   rolling: true
 }));
+
+app.use((req, res, next) => {
+  console.log('Request URL:', req.url);
+  console.log('Session ID:', req.sessionID);
+  console.log('Session Data:', req.session);
+  next();
+});
 
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
@@ -166,55 +173,63 @@ app.post('/register', (req, res) => {
 });
 
 app.post('/checkAllTables', (req, res) => {
-  const { username, password } = req.body;
-  console.log(`Checking for user: ${username}`);
-  const tables = ['admin_details', 'user_details', 'police_details', 'responder_details', 'unit_details', 'barangay_details'];
+    const { username, password } = req.body;
+    console.log('Login attempt for:', username);
+    
+    const tables = ['admin_details', 'user_details', 'police_details', 'responder_details', 'unit_details', 'barangay_details'];
+    let found = false;
+    let checksCompleted = 0;
 
-  let found = false;
+    tables.forEach(table => {
+        const query = `SELECT * FROM ${table} WHERE username = ? AND password = ?`;
+        db.query(query, [username, password], (err, results) => {
+            checksCompleted++;
+            
+            if (err) {
+                console.error(`Error querying ${table}:`, err);
+                return;
+            }
 
-  tables.forEach((table, index) => {
-    const query = `SELECT * FROM ${table} WHERE username = ? AND password = ?`;
-    db.query(query, [username, password], (err, results) => {
-      if (err) {
-        console.error(`Error querying table ${table}:`, err);
-        if (index === tables.length - 1 && !found) {
-          res.status(500).send({ message: "Error checking tables" });
-        }
-        return;
-      }
+            if (results.length > 0 && !found) {
+                found = true;
+                const userData = results[0];
+                
+                // Set session data
+                req.session.user = {
+                    id: userData.id,
+                    username: userData.username,
+                    table: table,
+                    firstname: userData.firstname,
+                    lastname: userData.lastname
+                };
 
-      if (results.length > 0) {
-        found = true;
-        console.log(`Found in table: ${table}`);
-        
-        // Set session data
-        req.session.user = { 
-          username, 
-          table,
-          id: results[0].id // optionally store user ID
-        };
-        
-        // Save session explicitly
-        req.session.save(err => {
-          if (err) {
-            console.error('Error saving session:', err);
-            return res.status(500).send({ message: "Error saving session" });
-          }
-          console.log('Session saved:', req.session);
-          res.send({ 
-            message: "Login Successful", 
-            table, 
-            sessionId: req.sessionID 
-          });
+                // Save session explicitly
+                req.session.save((err) => {
+                    if (err) {
+                        console.error('Session save error:', err);
+                        return res.status(500).json({ message: 'Session save failed' });
+                    }
+                    
+                    console.log('Session saved successfully:', req.session);
+                    return res.json({
+                        message: "Login Successful",
+                        table: table,
+                        user: {
+                            username: userData.username,
+                            firstname: userData.firstname,
+                            lastname: userData.lastname,
+                            table: table
+                        }
+                    });
+                });
+            }
+
+            // If we've checked all tables and found nothing
+            if (checksCompleted === tables.length && !found) {
+                res.json({ message: "Invalid Credentials" });
+            }
         });
-      }
-
-      if (index === tables.length - 1 && !found) {
-        console.log("User not found in any table");
-        res.send({ message: "Invalid Credentials" });
-      }
     });
-  });
 });
 
 app.post('/logout', (req, res) => {
@@ -730,28 +745,27 @@ app.get('/api/accounts/:table/:id', (req, res) => {
 });
 
 app.get('/checkSession', (req, res) => {
-    console.log('Session check:', req.session);
-    
+    console.log('Checking session:', req.session);
+    console.log('Session ID:', req.sessionID);
+    console.log('Session user:', req.session?.user);
+
     if (req.session && req.session.user) {
-        // Query the database to get full user details
+        // Query the database to verify the user still exists
         const table = req.session.user.table;
         const username = req.session.user.username;
         
         const query = `SELECT * FROM ${table} WHERE username = ?`;
         db.query(query, [username], (err, results) => {
             if (err) {
-                console.error('Error fetching user data:', err);
-                return res.json({
-                    isAuthenticated: false
-                });
+                console.error('Database query error:', err);
+                return res.json({ isAuthenticated: false });
             }
-            
+
             if (results.length > 0) {
                 const userData = results[0];
-                // Remove sensitive information
-                delete userData.password;
+                delete userData.password; // Remove sensitive data
                 
-                res.json({
+                return res.json({
                     isAuthenticated: true,
                     user: {
                         ...userData,
@@ -759,15 +773,12 @@ app.get('/checkSession', (req, res) => {
                     }
                 });
             } else {
-                res.json({
-                    isAuthenticated: false
-                });
+                return res.json({ isAuthenticated: false });
             }
         });
     } else {
-        res.json({
-            isAuthenticated: false
-        });
+        console.log('No session or user found');
+        return res.json({ isAuthenticated: false });
     }
 });
 

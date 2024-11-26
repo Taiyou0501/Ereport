@@ -9,19 +9,17 @@ export const AuthProvider = ({ children }) => {
   const [isLoading, setIsLoading] = useState(true);
   const [user, setUser] = useState(null);
 
-  useEffect(() => {
-    checkAuth();
-  }, []);
-
   const checkAuth = async () => {
     try {
       console.log('Checking authentication status...');
       const response = await api.get('/checkSession');
-      console.log('Check session response:', response.data);
-      
+      console.log('Session check response:', response.data);
+
       setIsAuthenticated(response.data.isAuthenticated);
-      if (response.data.user) {
+      if (response.data.isAuthenticated && response.data.user) {
         setUser(response.data.user);
+      } else {
+        setUser(null);
       }
     } catch (error) {
       console.error('Auth check failed:', error);
@@ -32,9 +30,12 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  const login = () => {
-    setIsAuthenticated(true);
-    checkAuth(); // Refresh the auth state after login
+  useEffect(() => {
+    checkAuth();
+  }, []);
+
+  const login = async () => {
+    await checkAuth(); // Recheck auth state after login
   };
 
   const logout = async () => {
