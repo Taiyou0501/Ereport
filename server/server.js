@@ -730,22 +730,45 @@ app.get('/api/accounts/:table/:id', (req, res) => {
 });
 
 app.get('/checkSession', (req, res) => {
-  console.log('Session check:', req.session);
-  console.log('User in session:', req.session.user);
-  
-  if (req.session && req.session.user) {
-    res.json({
-      isAuthenticated: true,
-      user: {
-        username: req.session.user.username,
-        table: req.session.user.table
-      }
-    });
-  } else {
-    res.json({
-      isAuthenticated: false
-    });
-  }
+    console.log('Session check:', req.session);
+    
+    if (req.session && req.session.user) {
+        // Query the database to get full user details
+        const table = req.session.user.table;
+        const username = req.session.user.username;
+        
+        const query = `SELECT * FROM ${table} WHERE username = ?`;
+        db.query(query, [username], (err, results) => {
+            if (err) {
+                console.error('Error fetching user data:', err);
+                return res.json({
+                    isAuthenticated: false
+                });
+            }
+            
+            if (results.length > 0) {
+                const userData = results[0];
+                // Remove sensitive information
+                delete userData.password;
+                
+                res.json({
+                    isAuthenticated: true,
+                    user: {
+                        ...userData,
+                        table: table
+                    }
+                });
+            } else {
+                res.json({
+                    isAuthenticated: false
+                });
+            }
+        });
+    } else {
+        res.json({
+            isAuthenticated: false
+        });
+    }
 });
 
 
