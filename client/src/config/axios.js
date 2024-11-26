@@ -8,20 +8,18 @@ console.log('Mode:', import.meta.env.MODE);
 console.log('Base URL:', baseURL);
 
 const api = axios.create({
-    baseURL: import.meta.env.VITE_API_URL || 'http://localhost:8081',
+    baseURL,
     withCredentials: true,
     headers: {
         'Content-Type': 'application/json'
     }
 });
 
-// Modify request interceptor
+// Add request interceptor for debugging
 api.interceptors.request.use(
     config => {
-        config.withCredentials = true;
-        // Don't set this header manually, let the browser handle it
-        delete config.headers['Access-Control-Allow-Credentials'];
-        console.log('Starting Request:', config.url);
+        console.log('Making request to:', config.url);
+        console.log('Request config:', config);
         return config;
     },
     error => {
@@ -29,7 +27,7 @@ api.interceptors.request.use(
     }
 );
 
-// Response interceptor
+// Add response interceptor for debugging
 api.interceptors.response.use(
     response => {
         console.log('Response:', response);
@@ -37,10 +35,6 @@ api.interceptors.response.use(
     },
     error => {
         console.error('Response Error:', error);
-        if (error.response) {
-            console.error('Error Status:', error.response.status);
-            console.error('Error Data:', error.response.data);
-        }
         return Promise.reject(error);
     }
 );

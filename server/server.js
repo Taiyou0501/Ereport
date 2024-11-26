@@ -21,7 +21,7 @@ const allowedOrigins = [
   'https://ereport-4gl8-gzpuca0j3-taiyou0501s-projects.vercel.app'
 ];
 
-app.use(cors({
+const corsOptions = {
   origin: function (origin, callback) {
     console.log('Request origin:', origin);
     if (!origin || allowedOrigins.includes(origin)) {
@@ -33,24 +33,22 @@ app.use(cors({
   },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'Cookie', 'access-control-allow-credentials'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'Cookie'],
   exposedHeaders: ['set-cookie'],
   preflightContinue: false,
   optionsSuccessStatus: 204
-}));
+};
+
+app.use(cors(corsOptions));
 
 app.use((req, res, next) => {
   const origin = req.headers.origin;
   if (allowedOrigins.includes(origin)) {
     res.header('Access-Control-Allow-Origin', origin);
     res.header('Access-Control-Allow-Credentials', 'true');
-    res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-    res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, Cookie, access-control-allow-credentials');
   }
   next();
 });
-
-app.options('*', cors());
 
 app.use(express.json());
 
@@ -63,11 +61,12 @@ app.use(session({
   resave: true,
   saveUninitialized: false,
   cookie: { 
-    secure: process.env.NODE_ENV === 'production',
+    secure: true,
     sameSite: 'none',
     maxAge: 1000 * 60 * 60 * 24,
     httpOnly: true,
     path: '/',
+    domain: '.onrender.com'
   },
   rolling: true
 }));
