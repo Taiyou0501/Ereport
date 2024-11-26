@@ -8,17 +8,15 @@ console.log('Mode:', import.meta.env.MODE);
 console.log('Base URL:', baseURL);
 
 const api = axios.create({
-    baseURL,
+    baseURL: import.meta.env.VITE_API_URL || 'http://localhost:8081',
     withCredentials: true,
     headers: {
-        'Content-Type': 'application/json'
-    },
-    xhrFields: {
-        withCredentials: true
+        'Content-Type': 'application/json',
+        'Access-Control-Allow-Credentials': 'true'
     }
 });
 
-// Add request interceptor for debugging
+// Add request interceptor
 api.interceptors.request.use(request => {
     request.withCredentials = true;
     console.log('Starting Request:', request.url);
@@ -33,6 +31,10 @@ api.interceptors.response.use(
     },
     error => {
         console.error('Response Error:', error);
+        if (error.response) {
+            console.error('Error Status:', error.response.status);
+            console.error('Error Data:', error.response.data);
+        }
         return Promise.reject(error);
     }
 );

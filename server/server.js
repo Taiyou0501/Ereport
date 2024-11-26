@@ -22,31 +22,50 @@ const allowedOrigins = [
 
 app.use(cors({
   origin: function (origin, callback) {
-    if (!origin || allowedOrigins.indexOf(origin) !== -1) {
-      callback(null, true); 
+    console.log('Request origin:', origin);
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true);
     } else {
+      console.log('Origin not allowed:', origin);
       callback(new Error('Not allowed by CORS'));
     }
   },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization']
+  allowedHeaders: ['Content-Type', 'Authorization', 'Cookie'],
+  exposedHeaders: ['set-cookie'],
 }));
+
+app.use((req, res, next) => {
+  const origin = req.headers.origin;
+  if (allowedOrigins.includes(origin)) {
+    res.setHeader('Access-Control-Allow-Origin', origin);
+  }
+  res.setHeader('Access-Control-Allow-Credentials', 'true');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, Cookie');
+  next();
+});
+
+app.options('*', cors());
+
 app.use(express.json());
 
 app.use(session({
   key: 'session_cookie_name',
-  secret: 'Te8LtamAsYFGxL6aS/VA2z1l/mQICv8rdX/YjX59C2o=',
+  secret: process.env.SESSION_SECRET || 'Te8LtamAsYFGxL6aS/VA2z1l/mQICv8rdX/YjX59C2o=',
   store: new MemoryStore({
-    checkPeriod: 86400000 // prune expired entries every 24h
+    checkPeriod: 86400000
   }),
   resave: false,
   saveUninitialized: false,
   cookie: { 
-    secure: process.env.NODE_ENV === 'production', // Only use secure cookies in production
-    sameSite: 'none', // Required for cross-domain cookies
-    maxAge: 1000 * 60 * 60 * 24, // 1 day
-    domain: process.env.NODE_ENV === 'production' ? '.onrender.com' : undefined // Adjust domain for production
+    secure: process.env.NODE_ENV === 'production', // true in production
+    sameSite: 'none', // Required for cross-site cookies
+    maxAge: 1000 * 60 * 60 * 24,
+    httpOnly: true,
+    path: '/',
+    domain: process.env.NODE_ENV === 'production' ? '.onrender.com' : undefined
   },
   rolling: true
 }));
