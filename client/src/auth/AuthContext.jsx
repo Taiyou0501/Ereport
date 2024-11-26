@@ -7,6 +7,7 @@ const AuthContext = createContext();
 export const AuthProvider = ({ children }) => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const [user, setUser] = useState(null);
 
   useEffect(() => {
     checkAuth();
@@ -14,11 +15,18 @@ export const AuthProvider = ({ children }) => {
 
   const checkAuth = async () => {
     try {
+      console.log('Checking authentication status...');
       const response = await api.get('/checkSession');
+      console.log('Check session response:', response.data);
+      
       setIsAuthenticated(response.data.isAuthenticated);
+      if (response.data.user) {
+        setUser(response.data.user);
+      }
     } catch (error) {
       console.error('Auth check failed:', error);
       setIsAuthenticated(false);
+      setUser(null);
     } finally {
       setIsLoading(false);
     }
@@ -26,23 +34,25 @@ export const AuthProvider = ({ children }) => {
 
   const login = () => {
     setIsAuthenticated(true);
+    checkAuth(); // Refresh the auth state after login
   };
 
   const logout = async () => {
     try {
       await api.post('/logout');
       setIsAuthenticated(false);
+      setUser(null);
     } catch (error) {
       console.error('Logout failed:', error);
     }
   };
 
   if (isLoading) {
-    return <div>Loading...</div>; // Or your loading component
+    return <div>Loading...</div>;
   }
 
   return (
-    <AuthContext.Provider value={{ isAuthenticated, login, logout }}>
+    <AuthContext.Provider value={{ isAuthenticated, login, logout, user }}>
       {children}
     </AuthContext.Provider>
   );

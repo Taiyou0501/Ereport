@@ -186,13 +186,26 @@ app.post('/checkAllTables', (req, res) => {
       if (results.length > 0) {
         found = true;
         console.log(`Found in table: ${table}`);
-        req.session.user = { username, table }; // Store session data
+        
+        // Set session data
+        req.session.user = { 
+          username, 
+          table,
+          id: results[0].id // optionally store user ID
+        };
+        
+        // Save session explicitly
         req.session.save(err => {
           if (err) {
             console.error('Error saving session:', err);
             return res.status(500).send({ message: "Error saving session" });
           }
-          res.send({ message: "Login Successful", table, sessionId: req.sessionID });
+          console.log('Session saved:', req.session);
+          res.send({ 
+            message: "Login Successful", 
+            table, 
+            sessionId: req.sessionID 
+          });
         });
       }
 
@@ -717,22 +730,21 @@ app.get('/api/accounts/:table/:id', (req, res) => {
 });
 
 app.get('/checkSession', (req, res) => {
-  if (req.session.user) {
-    const { username, table } = req.session.user;
-    const sql = `SELECT * FROM ${table} WHERE username = ?`;
-    
-    db.query(sql, [username], (err, results) => {
-      if (err) {
-        console.error('Error fetching user details:', err);
-        return res.status(500).json({ message: 'Error fetching user details' });
+  console.log('Session check:', req.session);
+  console.log('User in session:', req.session.user);
+  
+  if (req.session && req.session.user) {
+    res.json({
+      isAuthenticated: true,
+      user: {
+        username: req.session.user.username,
+        table: req.session.user.table
       }
-      if (results.length === 0) {
-        return res.status(404).json({ message: 'User not found' });
-      }
-      res.send({ isAuthenticated: true, user: results[0] });
     });
   } else {
-    res.send({ isAuthenticated: false });
+    res.json({
+      isAuthenticated: false
+    });
   }
 });
 
