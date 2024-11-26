@@ -17,7 +17,8 @@ const app = express()
 const allowedOrigins = [
   'http://localhost:5173',
   'http://192.168.0.77:5173',
-  'https://ereport-4gl8.vercel.app' // Add your deployed client URL here
+  'https://ereport-4gl8.vercel.app',
+  'https://ereport-4gl8-gzpuca0j3-taiyou0501s-projects.vercel.app'
 ];
 
 app.use(cors({
@@ -33,17 +34,17 @@ app.use(cors({
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'Cookie'],
-  exposedHeaders: ['set-cookie'],
+  exposedHeaders: ['set-cookie']
 }));
 
 app.use((req, res, next) => {
   const origin = req.headers.origin;
   if (allowedOrigins.includes(origin)) {
     res.setHeader('Access-Control-Allow-Origin', origin);
+    res.setHeader('Access-Control-Allow-Credentials', 'true');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, Cookie');
   }
-  res.setHeader('Access-Control-Allow-Credentials', 'true');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, Cookie');
   next();
 });
 
