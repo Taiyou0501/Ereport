@@ -33,17 +33,19 @@ app.use(cors({
   },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'Cookie'],
-  exposedHeaders: ['set-cookie']
+  allowedHeaders: ['Content-Type', 'Authorization', 'Cookie', 'access-control-allow-credentials'],
+  exposedHeaders: ['set-cookie'],
+  preflightContinue: false,
+  optionsSuccessStatus: 204
 }));
 
 app.use((req, res, next) => {
   const origin = req.headers.origin;
   if (allowedOrigins.includes(origin)) {
-    res.setHeader('Access-Control-Allow-Origin', origin);
-    res.setHeader('Access-Control-Allow-Credentials', 'true');
-    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, Cookie');
+    res.header('Access-Control-Allow-Origin', origin);
+    res.header('Access-Control-Allow-Credentials', 'true');
+    res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+    res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, Cookie, access-control-allow-credentials');
   }
   next();
 });
@@ -61,12 +63,11 @@ app.use(session({
   resave: false,
   saveUninitialized: false,
   cookie: { 
-    secure: process.env.NODE_ENV === 'production', // true in production
-    sameSite: 'none', // Required for cross-site cookies
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'none',
     maxAge: 1000 * 60 * 60 * 24,
     httpOnly: true,
     path: '/',
-    domain: process.env.NODE_ENV === 'production' ? '.onrender.com' : undefined
   },
   rolling: true
 }));
@@ -113,6 +114,8 @@ db.on('acquire', function (connection) {
 db.on('release', function (connection) {
   console.log('Connection %d released', connection.threadId);
 });
+
+app.options('/checkAllTables', cors());
 
 app.post('/register', (req, res) => {
   const { firstname, lastname, username, email, password, cpnumber } = req.body; // Add cpnumber here
