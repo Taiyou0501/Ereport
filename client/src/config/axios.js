@@ -12,11 +12,15 @@ const api = axios.create({
     withCredentials: true,
     headers: {
         'Content-Type': 'application/json'
+    },
+    xhrFields: {
+        withCredentials: true
     }
 });
 
 // Add request interceptor for debugging
 api.interceptors.request.use(request => {
+    request.withCredentials = true;
     console.log('Starting Request:', request.url);
     return request;
 });

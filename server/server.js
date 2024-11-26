@@ -28,7 +28,9 @@ app.use(cors({
       callback(new Error('Not allowed by CORS'));
     }
   },
-  credentials: true
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization']
 }));
 app.use(express.json());
 
@@ -41,8 +43,10 @@ app.use(session({
   resave: false,
   saveUninitialized: false,
   cookie: { 
-    secure: false,
-    maxAge: 1000 * 60 * 60 * 24 // 1 day
+    secure: process.env.NODE_ENV === 'production', // Only use secure cookies in production
+    sameSite: 'none', // Required for cross-domain cookies
+    maxAge: 1000 * 60 * 60 * 24, // 1 day
+    domain: process.env.NODE_ENV === 'production' ? '.onrender.com' : undefined // Adjust domain for production
   },
   rolling: true
 }));
