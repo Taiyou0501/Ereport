@@ -60,22 +60,12 @@ const upload = multer({ storage });
 
 
 const db = mysql.createPool({
-  host: env === 'production' 
-    ? process.env.MYSQL_ADDON_HOST 
-    : process.env.DB_HOST,
-  user: env === 'production' 
-    ? process.env.MYSQL_ADDON_USER 
-    : process.env.DB_USER,
-  password: env === 'production' 
-    ? process.env.MYSQL_ADDON_PASSWORD 
-    : process.env.DB_PASSWORD,
-  database: env === 'production' 
-    ? process.env.MYSQL_ADDON_DB 
-    : process.env.DB_DATABASE,
-  port: env === 'production' 
-    ? process.env.MYSQL_ADDON_PORT 
-    : process.env.DB_PORT,
-  connectionLimit: env === 'production' ? 3 : 10,
+  host: process.env.MYSQL_ADDON_HOST,
+  user: process.env.MYSQL_ADDON_USER,
+  password: process.env.MYSQL_ADDON_PASSWORD,
+  database: process.env.MYSQL_ADDON_DB,
+  port: process.env.MYSQL_ADDON_PORT,
+  connectionLimit: 3,
   queueLimit: 0,
   waitForConnections: true,
   connectTimeout: 10000,
