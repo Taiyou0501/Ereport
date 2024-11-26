@@ -1219,8 +1219,58 @@ app.put('/api/full_report/:id/barangayStatus', (req, res) => {
     });
 });
 
-const port = process.env.PORT || 8081;
+// Endpoint to update responder status and ETA
+app.put('/api/full_report/:id/responderStatus', (req, res) => {
+    const { id } = req.params;
+    const { closestResponderId, eta } = req.body;
+    
+    console.log('Updating responder status:', { id, closestResponderId, eta });
+    
+    const sql = 'UPDATE full_report SET closestResponderId = ?, eta = ? WHERE id = ?';
+    db.query(sql, [closestResponderId, eta, id], (err, result) => {
+        if (err) {
+            console.error('Error updating responder status:', err);
+            return res.status(500).json({ message: 'Error updating responder status' });
+        }
+        console.log('Responder status updated successfully');
+        res.status(200).json({ message: 'Responder status updated successfully' });
+    });
+});
 
-app.listen(port, () => {
-    console.log(`Server running on port ${port}`)
+// Endpoint to get active responders with their locations
+app.get('/api/responders/available', (req, res) => {
+    const { type } = req.query;
+    let sql = 'SELECT id, latitude, longitude, respondertype FROM responder_details WHERE situation = "active"';
+    
+    if (type) {
+        sql += ' AND respondertype = ?';
+    }
+    
+    db.query(sql, [type], (err, results) => {
+        if (err) {
+            console.error('Error fetching available responders:', err);
+            return res.status(500).json({ message: 'Error fetching available responders' });
+        }
+        res.status(200).json(results);
+    });
+});
+
+app.put('/api/full_report/:id/setFakeReport', (req, res) => {
+    const { id } = req.params;
+    
+    console.log('Setting report as fake:', { id });
+    
+    const sql = 'UPDATE full_report SET status = "Fake Report" WHERE id = ?';
+    db.query(sql, [id], (err, result) => {
+        if (err) {
+            console.error('Error updating report status:', err);
+            return res.status(500).json({ message: 'Error updating report status' });
+        }
+        console.log('Report marked as fake successfully');
+        res.status(200).json({ message: 'Report marked as fake successfully' });
+    });
+});
+
+app.listen(8081, () => {
+    console.log("Listening...")
 } )

@@ -284,11 +284,13 @@
 
 .respond-btn-container {
   display: flex;
+  flex-direction: column;
   justify-content: center;
   align-items: center;
   margin: 2vw 0;
   position: relative;
-  height: 4vw;
+  min-height: 6vw;
+  width: 100%;
 }
 
 .respond-btn,
@@ -302,14 +304,13 @@
   color: white;
   font-size: 4vw;
   font-family: "Russo One", Helvetica, sans-serif;
-  padding: 0.5vw 1vw;
+  padding: 0.8vw 2vw;
   border: none;
   cursor: pointer;
   border-radius: 8px;
   box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
   z-index: 1;
-  opacity: 1;
-  transition: transform 0.3s ease, background-color 0.3s ease;
+  margin-bottom: 2vw;
 }
 
 .button-hidden {
@@ -449,6 +450,35 @@
   transform: scale(1.1);
 }
 
+.fake-report-btn-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  margin-top: 5vw;
+  margin-bottom: 2vw;
+}
+
+.fake-report-btn {
+  background-color: red;
+  color: white;
+  font-size: 2.5vw;
+  font-family: "Russo One", Helvetica, sans-serif;
+  padding: 0.8vw 2vw;
+  border: none;
+  cursor: pointer;
+  border-radius: 8px;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+  transition: transform 0.3s ease, background-color 0.3s ease;
+}
+
+.fake-report-btn:hover {
+  transform: scale(1.1);
+}
+
+.fake-report-btn:active {
+  transform: scale(0.9);
+}
+
 @media (max-width: 480px) and (orientation: portrait) {
   .index-responder-header {
     height: 15vw !important;
@@ -562,5 +592,10 @@
   .main-menu-btn {
     font-size: 7vw;
     padding: 3vw;
+  }
+  .fake-report-btn {
+    font-size: 6vw;
+    padding: 2vw 4vw;
+    margin-top: 2vw;
   }
 }/*# sourceMappingURL=responder.css.map */
